@@ -2,180 +2,469 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>三人炸飞机</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>三人炸飞机 · 完整对战版</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            color: white;
+            background: linear-gradient(135deg, #1a1e2c, #2d3748);
+            font-family: 'Microsoft YaHei', sans-serif;
+            padding: 12px;
+            color: #e2e8f0;
         }
-        .box {
-            max-width: 600px;
+        .container {
+            max-width: 100%;
             margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            color: #333;
+            background: rgba(26, 32, 44, 0.95);
+            border-radius: 24px;
+            padding: 20px;
+            border: 1px solid #4a5568;
         }
-        h1 { text-align: center; color: #4a5568; }
+        h1 { text-align: center; color: #e2e8f0; margin-bottom: 20px; }
+        
+        /* 按钮样式 */
         .btn {
             display: block;
             width: 100%;
-            padding: 15px;
-            margin: 10px 0;
-            background: #4299e1;
-            color: white;
+            padding: 16px;
+            margin: 12px 0;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 18px;
+            font-weight: bold;
             cursor: pointer;
+            color: white;
         }
-        .btn:hover { background: #3182ce; }
-        .btn-green { background: #48bb78; }
-        .btn-green:hover { background: #38a169; }
+        .btn-primary { background: #4299e1; }
+        .btn-success { background: #48bb78; }
+        .btn-warning { background: #ed8936; }
+        .btn:active { transform: scale(0.98); }
+        
+        .hidden { display: none !important; }
+        
+        /* 房间信息 */
+        .room-header {
+            background: #2d3748;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
         .room-code {
-            font-size: 48px;
+            font-size: 42px;
             font-weight: bold;
             text-align: center;
-            color: #48bb78;
-            letter-spacing: 10px;
+            color: #68d391;
+            letter-spacing: 12px;
+        }
+        
+        /* 玩家列表 */
+        .players-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
             margin: 20px 0;
         }
-        .hidden { display: none; }
-        input {
-            width: 100%;
-            padding: 15px;
-            font-size: 24px;
+        .player-card {
+            background: #2d3748;
+            padding: 16px;
+            border-radius: 12px;
             text-align: center;
-            border: 2px solid #ddd;
-            border-radius: 10px;
-            margin: 10px 0;
+            border: 2px solid #4a5568;
         }
-        .player-item {
-            padding: 15px;
-            background: #f7fafc;
-            margin: 5px 0;
-            border-radius: 10px;
-            border-left: 5px solid #48bb78;
+        .player-card.active { border-color: #48bb78; background: #22543d; }
+        .player-card.ready { border-color: #48bb78; background: #276749; }
+        
+        /* 游戏棋盘 */
+        .battle-area {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
         }
-        .player-empty {
+        .grid-container {
+            background: #2d3748;
             padding: 15px;
-            background: #f7fafc;
-            margin: 5px 0;
-            border-radius: 10px;
-            opacity: 0.5;
+            border-radius: 16px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 3px;
+            aspect-ratio: 1;
+        }
+        .cell {
+            aspect-ratio: 1;
+            background: #1a1e2c;
+            border: 1px solid #4a5568;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: white;
+        }
+        .cell.own-plane { background: #48bb78; }
+        .cell.hit { background: #f56565; }
+        .cell.miss { background: #4299e1; }
+        .cell.enemy { cursor: pointer; }
+        .cell.enemy:hover { background: #4a5568; }
+        
+        .turn-indicator {
+            background: #48bb78;
+            color: white;
+            padding: 12px;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
-    <div class="box">
-        <h1>✈️ 三人炸飞机</h1>
+    <div class="container">
+        <h1>✈️ 三人炸飞机 · 完整对战</h1>
         
         <!-- 主菜单 -->
         <div id="menu">
-            <button class="btn btn-green" onclick="createRoom()">创建房间</button>
-            <button class="btn" onclick="showJoin()">加入房间</button>
+            <button class="btn btn-primary" onclick="createRoom()">创建房间</button>
+            <button class="btn btn-success" onclick="showJoin()">加入房间</button>
         </div>
         
-        <!-- 加入房间界面 -->
+        <!-- 加入房间 -->
         <div id="joinPage" class="hidden">
-            <h2 style="text-align: center;">加入房间</h2>
-            <input type="text" id="roomCodeInput" placeholder="输入6位房间号" maxlength="6">
-            <button class="btn btn-green" onclick="joinRoom()">加入</button>
-            <button class="btn" onclick="backToMenu()">返回</button>
+            <div class="room-header">
+                <h2 style="text-align: center;">🔑 加入房间</h2>
+                <input type="text" id="roomCodeInput" placeholder="输入6位房间号" 
+                       style="width: 100%; padding: 18px; font-size: 24px; text-align: center; 
+                              background: #1a1e2c; border: 2px solid #4a5568; border-radius: 12px;
+                              color: white; letter-spacing: 4px;" maxlength="6">
+            </div>
+            <button class="btn btn-success" onclick="joinRoom()">加入</button>
+            <button class="btn btn-warning" onclick="backToMenu()">返回</button>
         </div>
         
-        <!-- 等待房间界面 -->
+        <!-- 等待房间 -->
         <div id="waitPage" class="hidden">
-            <div style="text-align: center; margin-bottom: 20px;">
-                <h2>房间号</h2>
-                <div style="font-size: 48px; font-weight: bold; color: #48bb78; letter-spacing: 10px;" id="roomCodeDisplay">ABC123</div>
+            <div class="room-header">
+                <div style="text-align: center; margin-bottom: 10px;">房间号</div>
+                <div class="room-code" id="roomCodeDisplay">ABC123</div>
             </div>
             
-            <div style="background: #f7fafc; padding: 15px; border-radius: 10px; margin-bottom: 20px; word-break: break-all;" id="shareLink">
-                正在生成链接...
+            <div style="background: #2d3748; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                <div style="word-break: break-all; color: #a0aec0;" id="shareLink">链接生成中...</div>
+                <button class="btn btn-success" style="margin-top: 15px;" onclick="copyLink()">📋 复制链接</button>
             </div>
-            <button class="btn btn-green" onclick="copyLink()">📋 复制链接发给好友</button>
             
-            <h3 style="margin-top: 30px;">👥 玩家列表</h3>
-            <div id="playerList"></div>
+            <div class="players-grid" id="playerList"></div>
             
-            <button id="readyBtn" class="btn btn-green" onclick="toggleReady()">准备游戏</button>
-            <button class="btn" onclick="leaveRoom()">离开房间</button>
+            <button id="readyBtn" class="btn btn-success" onclick="toggleReady()">准备游戏</button>
+            <button class="btn btn-warning" onclick="leaveRoom()">离开</button>
         </div>
         
         <!-- 游戏界面 -->
         <div id="gamePage" class="hidden">
-            <h2 style="text-align: center; color: #48bb78;">🎮 游戏开始！</h2>
-            <p style="text-align: center; font-size: 20px;">三人已准备，游戏马上开始</p>
-            <button class="btn" onclick="leaveGame()">退出</button>
+            <div id="turnDisplay" class="turn-indicator">⚔️ 你的回合</div>
+            
+            <div class="battle-area">
+                <!-- 自己的棋盘 -->
+                <div class="grid-container">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                        <span>✈️ 我的阵地</span>
+                        <span id="myPlanesLeft">飞机: 3</span>
+                    </div>
+                    <div id="myGrid" class="grid"></div>
+                </div>
+                
+                <!-- 敌人选择 -->
+                <div id="enemySelectArea" style="display: flex; gap: 10px;">
+                    <button id="enemy2Btn" class="btn" style="flex: 1;" onclick="selectEnemy(2)">⚔️ 攻击玩家2</button>
+                    <button id="enemy3Btn" class="btn" style="flex: 1;" onclick="selectEnemy(3)">⚔️ 攻击玩家3</button>
+                </div>
+                
+                <!-- 敌人棋盘 -->
+                <div id="enemyGridArea" class="hidden">
+                    <div class="grid-container">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                            <span id="enemyTitle">⚔️ 攻击目标</span>
+                            <span id="enemyPlanesLeft">剩余飞机: 3</span>
+                        </div>
+                        <div id="enemyGrid" class="grid"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn btn-warning" onclick="leaveGame()" style="margin-top: 20px;">退出游戏</button>
         </div>
     </div>
 
     <script>
-        // ==================== 数据管理 ====================
+        // ==================== 游戏核心 ====================
+        class Game {
+            constructor() {
+                this.myGrid = Array(10).fill().map(() => Array(10).fill(0));
+                this.attackRecords = {};
+                this.myPlanes = 3;
+                this.enemyPlanes = {2: 3, 3: 3};
+                this.currentTurn = 1;
+                this.myPlayerNum = null;
+                this.selectedEnemy = null;
+                this.roomId = null;
+                
+                // 随机放置飞机
+                this.placePlanes();
+            }
+            
+            // 放置飞机（工字形）
+            placePlanes() {
+                const shapes = [
+                    // 上
+                    [[0,0,1,0,0], [1,1,1,1,1], [0,0,1,0,0], [0,1,1,1,0]],
+                    // 右
+                    [[0,1,0,0,0], [0,1,1,1,1], [0,1,0,1,0], [0,0,0,1,0]],
+                    // 下
+                    [[0,1,1,1,0], [0,0,1,0,0], [1,1,1,1,1], [0,0,1,0,0]],
+                    // 左
+                    [[0,0,0,1,0], [0,1,0,1,0], [1,1,1,1,0], [0,1,0,0,0]]
+                ];
+                
+                for (let p = 0; p < 3; p++) {
+                    let placed = false;
+                    let attempts = 0;
+                    
+                    while (!placed && attempts < 100) {
+                        const row = Math.floor(Math.random() * 7);
+                        const col = Math.floor(Math.random() * 7);
+                        const shape = shapes[Math.floor(Math.random() * shapes.length)];
+                        
+                        if (this.canPlace(row, col, shape)) {
+                            this.placeShape(row, col, shape);
+                            placed = true;
+                        }
+                        attempts++;
+                    }
+                }
+            }
+            
+            canPlace(startRow, startCol, shape) {
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 5; j++) {
+                        if (shape[i][j] === 1) {
+                            const row = startRow + i;
+                            const col = startCol + j;
+                            if (row >= 10 || col >= 10) return false;
+                            if (this.myGrid[row][col] === 1) return false;
+                        }
+                    }
+                }
+                return true;
+            }
+            
+            placeShape(startRow, startCol, shape) {
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 5; j++) {
+                        if (shape[i][j] === 1) {
+                            this.myGrid[startRow + i][startCol + j] = 1;
+                        }
+                    }
+                }
+            }
+            
+            // 渲染自己的棋盘
+            renderMyGrid() {
+                const grid = document.getElementById('myGrid');
+                grid.innerHTML = '';
+                
+                for (let i = 0; i < 10; i++) {
+                    for (let j = 0; j < 10; j++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell';
+                        if (this.myGrid[i][j] === 1) {
+                            cell.classList.add('own-plane');
+                            cell.textContent = '✈';
+                        }
+                        grid.appendChild(cell);
+                    }
+                }
+            }
+            
+            // 渲染敌人棋盘
+            renderEnemyGrid(playerNum) {
+                const grid = document.getElementById('enemyGrid');
+                grid.innerHTML = '';
+                
+                for (let i = 0; i < 10; i++) {
+                    for (let j = 0; j < 10; j++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell enemy';
+                        cell.dataset.row = i;
+                        cell.dataset.col = j;
+                        
+                        // 显示攻击记录
+                        const key = `${playerNum}-${i}-${j}`;
+                        if (this.attackRecords[key]) {
+                            if (this.attackRecords[key].hit) {
+                                cell.classList.add('hit');
+                                cell.textContent = '💥';
+                            } else {
+                                cell.classList.add('miss');
+                                cell.textContent = '×';
+                            }
+                        }
+                        
+                        cell.onclick = () => this.attack(playerNum, i, j);
+                        grid.appendChild(cell);
+                    }
+                }
+            }
+            
+            // 攻击
+            attack(playerNum, row, col) {
+                if (!this.isMyTurn()) {
+                    alert('现在不是你的回合！');
+                    return;
+                }
+                
+                if (this.selectedEnemy !== playerNum) {
+                    alert('请先选择要攻击的敌人！');
+                    return;
+                }
+                
+                const key = `${playerNum}-${row}-${col}`;
+                if (this.attackRecords[key]) {
+                    alert('这个位置已经攻击过了！');
+                    return;
+                }
+                
+                // 随机命中（真实游戏应该从对手棋盘判断）
+                const isHit = Math.random() > 0.5;
+                
+                this.attackRecords[key] = {
+                    hit: isHit,
+                    row: row,
+                    col: col
+                };
+                
+                if (isHit) {
+                    this.enemyPlanes[playerNum] -= 0.2;
+                    if (this.enemyPlanes[playerNum] <= 0) {
+                        this.enemyPlanes[playerNum] = 0;
+                        alert(`🎉 你击落了玩家${playerNum}的所有飞机！`);
+                    }
+                }
+                
+                // 更新显示
+                this.renderEnemyGrid(playerNum);
+                document.getElementById('enemyPlanesLeft').innerText = `剩余飞机: ${Math.round(this.enemyPlanes[playerNum] * 10) / 10}`;
+                
+                // 切换回合
+                this.nextTurn();
+            }
+            
+            // 是否是我的回合
+            isMyTurn() {
+                return this.currentTurn === this.myPlayerNum;
+            }
+            
+            // 切换回合
+            nextTurn() {
+                this.currentTurn = this.currentTurn === 3 ? 1 : this.currentTurn + 1;
+                
+                const turnDisplay = document.getElementById('turnDisplay');
+                if (this.isMyTurn()) {
+                    turnDisplay.innerHTML = '⚔️ 你的回合！选择敌人攻击';
+                    turnDisplay.style.background = '#48bb78';
+                    this.selectedEnemy = null;
+                    document.getElementById('enemySelectArea').style.display = 'flex';
+                    document.getElementById('enemyGridArea').classList.add('hidden');
+                } else {
+                    turnDisplay.innerHTML = `👀 玩家${this.currentTurn} 的回合`;
+                    turnDisplay.style.background = '#ed8936';
+                }
+            }
+            
+            // 选择敌人
+            selectEnemy(playerNum) {
+                this.selectedEnemy = playerNum;
+                document.getElementById('enemyTitle').innerHTML = `⚔️ 攻击玩家${playerNum}`;
+                document.getElementById('enemyPlanesLeft').innerText = `剩余飞机: ${Math.round(this.enemyPlanes[playerNum] * 10) / 10}`;
+                document.getElementById('enemySelectArea').style.display = 'none';
+                document.getElementById('enemyGridArea').classList.remove('hidden');
+                this.renderEnemyGrid(playerNum);
+            }
+            
+            // 开始游戏
+            startGame(playerNum) {
+                this.myPlayerNum = playerNum;
+                this.currentTurn = 1;
+                
+                document.getElementById('waitPage').classList.add('hidden');
+                document.getElementById('gamePage').classList.remove('hidden');
+                
+                this.renderMyGrid();
+                
+                if (this.isMyTurn()) {
+                    document.getElementById('turnDisplay').innerHTML = '⚔️ 你的回合！选择敌人攻击';
+                } else {
+                    document.getElementById('turnDisplay').innerHTML = '👀 等待玩家1开始...';
+                }
+            }
+        }
+
+        // ==================== 房间管理 ====================
         let currentRoom = null;
         let currentPlayer = null;
+        let game = null;
         let isReady = false;
         
-        // 获取房间数据
+        // localStorage 存储
         function getRoom(roomId) {
             const data = localStorage.getItem('room_' + roomId);
             return data ? JSON.parse(data) : null;
         }
         
-        // 保存房间数据
         function saveRoom(roomId, data) {
             localStorage.setItem('room_' + roomId, JSON.stringify(data));
         }
         
-        // ==================== 创建房间 ====================
+        // 创建房间
         function createRoom() {
-            // 生成6位房间号
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             let code = '';
             for (let i = 0; i < 6; i++) {
                 code += chars[Math.floor(Math.random() * chars.length)];
             }
             
-            // 创建房间数据
             const roomData = {
                 id: code,
-                players: [
-                    { num: 1, name: '玩家1', ready: false }
-                ],
+                players: [{ num: 1, name: '玩家1', ready: false }],
                 created: Date.now()
             };
             saveRoom(code, roomData);
             
-            // 设置当前玩家
             currentRoom = code;
             currentPlayer = 1;
             
-            // 生成分享链接
-            const link = window.location.href.split('?')[0] + '?room=' + code;
+            // 初始化游戏
+            game = new Game();
+            game.roomId = code;
+            game.myPlayerNum = 1;
             
-            // 更新UI
+            // 进入等待房间
+            document.getElementById('menu').classList.add('hidden');
+            document.getElementById('waitPage').classList.remove('hidden');
             document.getElementById('roomCodeDisplay').innerText = code;
+            
+            const link = window.location.href.split('?')[0] + '?room=' + code;
             document.getElementById('shareLink').innerText = link;
             
-            // **直接进入等待房间，不经过创建房间界面**
-            document.getElementById('menu').classList.add('hidden');
-            document.getElementById('joinPage').classList.add('hidden');
-            document.getElementById('waitPage').classList.remove('hidden');
-            
-            // 刷新玩家列表
             updatePlayerList();
         }
         
-        // ==================== 加入房间 ====================
+        // 加入房间
         function showJoin() {
             document.getElementById('menu').classList.add('hidden');
             document.getElementById('joinPage').classList.remove('hidden');
             
-            // 从URL获取房间号
             const urlParams = new URLSearchParams(window.location.search);
             const room = urlParams.get('room');
             if (room) {
@@ -192,21 +481,17 @@
             
             let roomData = getRoom(code);
             if (!roomData) {
-                alert('房间不存在，请检查房间号');
+                alert('房间不存在');
                 return;
             }
             
-            // 检查房间是否已满
             if (roomData.players.length >= 3) {
-                alert('房间已满！');
+                alert('房间已满');
                 return;
             }
             
-            // 获取可用的玩家编号
-            let playerNum = 2;
-            if (roomData.players.length === 2) playerNum = 3;
+            const playerNum = roomData.players.length === 1 ? 2 : 3;
             
-            // 添加玩家
             roomData.players.push({
                 num: playerNum,
                 name: '玩家' + playerNum,
@@ -214,63 +499,62 @@
             });
             saveRoom(code, roomData);
             
-            // 设置当前玩家
             currentRoom = code;
             currentPlayer = playerNum;
+            
+            // 初始化游戏
+            game = new Game();
+            game.roomId = code;
+            game.myPlayerNum = playerNum;
             
             // 进入等待房间
             document.getElementById('joinPage').classList.add('hidden');
             document.getElementById('waitPage').classList.remove('hidden');
             document.getElementById('roomCodeDisplay').innerText = code;
             
-            // 生成分享链接（方便转发）
             const link = window.location.href.split('?')[0] + '?room=' + code;
             document.getElementById('shareLink').innerText = link;
             
-            // 刷新玩家列表
             updatePlayerList();
         }
         
-        // ==================== 等待房间 ====================
+        // 更新玩家列表
         function updatePlayerList() {
             const roomData = getRoom(currentRoom);
             if (!roomData) return;
             
             let html = '';
-            
-            // 显示玩家1-3
             for (let i = 1; i <= 3; i++) {
                 const player = roomData.players.find(p => p.num === i);
-                
                 if (player) {
-                    let status = player.ready ? '✓ 已准备' : '⏳ 准备中';
-                    let isYou = (player.num === currentPlayer) ? ' (你)' : '';
-                    html += `<div class="player-item">👤 ${player.name}${isYou} - ${status}</div>`;
+                    const isYou = player.num === currentPlayer ? ' (你)' : '';
+                    const ready = player.ready ? '✓ 已准备' : '⏳ 准备中';
+                    html += `<div class="player-card ${player.ready ? 'ready' : ''} ${player.num === currentPlayer ? 'active' : ''}">
+                                <div style="font-size: 18px; margin-bottom: 5px;">👤 ${player.name}${isYou}</div>
+                                <div style="font-size: 14px; color: #a0aec0;">${ready}</div>
+                            </div>`;
                 } else {
-                    html += `<div class="player-empty">👤 等待玩家加入...</div>`;
+                    html += `<div class="player-card" style="opacity: 0.5;">
+                                <div style="font-size: 18px;">👤 等待玩家...</div>
+                            </div>`;
                 }
             }
-            
             document.getElementById('playerList').innerHTML = html;
             
-            // 更新准备按钮状态
+            // 更新准备按钮
             const me = roomData.players.find(p => p.num === currentPlayer);
             if (me) {
                 const btn = document.getElementById('readyBtn');
-                if (me.ready) {
-                    btn.innerText = '取消准备';
-                    btn.style.background = '#f56565';
-                } else {
-                    btn.innerText = '准备游戏';
-                    btn.style.background = '#48bb78';
-                }
+                btn.innerText = me.ready ? '取消准备' : '准备游戏';
+                btn.style.background = me.ready ? '#f56565' : '#48bb78';
             }
             
-            // 检查是否三人全部准备
+            // 检查是否全部准备
             if (roomData.players.length === 3 && roomData.players.every(p => p.ready)) {
                 setTimeout(() => {
-                    document.getElementById('waitPage').classList.add('hidden');
-                    document.getElementById('gamePage').classList.remove('hidden');
+                    if (game) {
+                        game.startGame(currentPlayer);
+                    }
                 }, 1000);
             }
         }
@@ -288,14 +572,22 @@
             }
         }
         
-        // ==================== 工具函数 ====================
+        // 选择敌人
+        function selectEnemy(playerNum) {
+            if (game) {
+                game.selectEnemy(playerNum);
+            }
+        }
+        
+        // 复制链接
         function copyLink() {
             const link = document.getElementById('shareLink').innerText;
             navigator.clipboard.writeText(link).then(() => {
-                alert('✅ 链接已复制！发送给好友吧！');
+                alert('✅ 链接已复制！');
             });
         }
         
+        // 返回主菜单
         function backToMenu() {
             document.getElementById('menu').classList.remove('hidden');
             document.getElementById('joinPage').classList.add('hidden');
@@ -303,12 +595,11 @@
             document.getElementById('gamePage').classList.add('hidden');
         }
         
+        // 离开房间
         function leaveRoom() {
             const roomData = getRoom(currentRoom);
             if (roomData) {
-                // 移除当前玩家
                 roomData.players = roomData.players.filter(p => p.num !== currentPlayer);
-                
                 if (roomData.players.length === 0) {
                     localStorage.removeItem('room_' + currentRoom);
                 } else {
@@ -322,14 +613,14 @@
             leaveRoom();
         }
         
-        // ==================== 定时刷新 ====================
+        // 定时刷新
         setInterval(() => {
             if (currentRoom && !document.getElementById('waitPage').classList.contains('hidden')) {
                 updatePlayerList();
             }
         }, 1000);
         
-        // ==================== 页面加载 ====================
+        // 页面加载
         window.onload = function() {
             const urlParams = new URLSearchParams(window.location.search);
             const room = urlParams.get('room');
