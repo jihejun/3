@@ -53,6 +53,20 @@
             border-radius: 10px;
             margin: 10px 0;
         }
+        .player-item {
+            padding: 15px;
+            background: #f7fafc;
+            margin: 5px 0;
+            border-radius: 10px;
+            border-left: 5px solid #48bb78;
+        }
+        .player-empty {
+            padding: 15px;
+            background: #f7fafc;
+            margin: 5px 0;
+            border-radius: 10px;
+            opacity: 0.5;
+        }
     </style>
 </head>
 <body>
@@ -61,22 +75,11 @@
         
         <!-- 主菜单 -->
         <div id="menu">
-            <button class="btn btn-green" onclick="showCreate()">创建房间</button>
+            <button class="btn btn-green" onclick="createRoom()">创建房间</button>
             <button class="btn" onclick="showJoin()">加入房间</button>
         </div>
         
-        <!-- 创建房间 -->
-        <div id="createPage" class="hidden">
-            <h2 style="text-align: center;">房间号</h2>
-            <div id="roomCodeDisplay" class="room-code">ABC123</div>
-            <div style="background: #f7fafc; padding: 15px; border-radius: 10px; word-break: break-all;" id="shareLink">
-                https://example.com?room=ABC123
-            </div>
-            <button class="btn btn-green" onclick="copyLink()">复制链接发给好友</button>
-            <button class="btn" onclick="backToMenu()">返回</button>
-        </div>
-        
-        <!-- 加入房间 -->
+        <!-- 加入房间界面 -->
         <div id="joinPage" class="hidden">
             <h2 style="text-align: center;">加入房间</h2>
             <input type="text" id="roomCodeInput" placeholder="输入6位房间号" maxlength="6">
@@ -84,12 +87,23 @@
             <button class="btn" onclick="backToMenu()">返回</button>
         </div>
         
-        <!-- 等待房间 -->
+        <!-- 等待房间界面 -->
         <div id="waitPage" class="hidden">
-            <h2 style="text-align: center;">房间 <span id="currentRoom" style="color: #48bb78;">ABC123</span></h2>
-            <div id="playerList" style="margin: 20px 0;"></div>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h2>房间号</h2>
+                <div style="font-size: 48px; font-weight: bold; color: #48bb78; letter-spacing: 10px;" id="roomCodeDisplay">ABC123</div>
+            </div>
+            
+            <div style="background: #f7fafc; padding: 15px; border-radius: 10px; margin-bottom: 20px; word-break: break-all;" id="shareLink">
+                正在生成链接...
+            </div>
+            <button class="btn btn-green" onclick="copyLink()">📋 复制链接发给好友</button>
+            
+            <h3 style="margin-top: 30px;">👥 玩家列表</h3>
+            <div id="playerList"></div>
+            
             <button id="readyBtn" class="btn btn-green" onclick="toggleReady()">准备游戏</button>
-            <button class="btn" onclick="leaveRoom()">离开</button>
+            <button class="btn" onclick="leaveRoom()">离开房间</button>
         </div>
         
         <!-- 游戏界面 -->
@@ -101,7 +115,7 @@
     </div>
 
     <script>
-        // 房间数据
+        // ==================== 数据管理 ====================
         let currentRoom = null;
         let currentPlayer = null;
         let isReady = false;
@@ -117,8 +131,8 @@
             localStorage.setItem('room_' + roomId, JSON.stringify(data));
         }
         
-        // 显示创建房间
-        function showCreate() {
+        // ==================== 创建房间 ====================
+        function createRoom() {
             // 生成6位房间号
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             let code = '';
@@ -126,10 +140,7 @@
                 code += chars[Math.floor(Math.random() * chars.length)];
             }
             
-            // 创建房间
-            currentRoom = code;
-            currentPlayer = 1;
-            
+            // 创建房间数据
             const roomData = {
                 id: code,
                 players: [
@@ -139,17 +150,27 @@
             };
             saveRoom(code, roomData);
             
-            // 更新界面
-            document.getElementById('roomCodeDisplay').innerText = code;
+            // 设置当前玩家
+            currentRoom = code;
+            currentPlayer = 1;
+            
+            // 生成分享链接
             const link = window.location.href.split('?')[0] + '?room=' + code;
+            
+            // 更新UI
+            document.getElementById('roomCodeDisplay').innerText = code;
             document.getElementById('shareLink').innerText = link;
             
-            // 切换页面
+            // **直接进入等待房间，不经过创建房间界面**
             document.getElementById('menu').classList.add('hidden');
-            document.getElementById('createPage').classList.remove('hidden');
+            document.getElementById('joinPage').classList.add('hidden');
+            document.getElementById('waitPage').classList.remove('hidden');
+            
+            // 刷新玩家列表
+            updatePlayerList();
         }
         
-        // 显示加入房间
+        // ==================== 加入房间 ====================
         function showJoin() {
             document.getElementById('menu').classList.add('hidden');
             document.getElementById('joinPage').classList.remove('hidden');
@@ -162,7 +183,6 @@
             }
         }
         
-        // 加入房间
         function joinRoom() {
             const code = document.getElementById('roomCodeInput').value.toUpperCase();
             if (code.length !== 6) {
@@ -172,24 +192,19 @@
             
             let roomData = getRoom(code);
             if (!roomData) {
-                // 房间不存在，创建新房间
-                roomData = {
-                    id: code,
-                    players: [
-                        { num: 1, name: '玩家1', ready: false }
-                    ],
-                    created: Date.now()
-                };
+                alert('房间不存在，请检查房间号');
+                return;
             }
             
-            // 获取玩家编号
-            let playerNum = 2;
-            if (roomData.players.length >= 2) playerNum = 3;
-            
+            // 检查房间是否已满
             if (roomData.players.length >= 3) {
                 alert('房间已满！');
                 return;
             }
+            
+            // 获取可用的玩家编号
+            let playerNum = 2;
+            if (roomData.players.length === 2) playerNum = 3;
             
             // 添加玩家
             roomData.players.push({
@@ -197,44 +212,59 @@
                 name: '玩家' + playerNum,
                 ready: false
             });
-            
             saveRoom(code, roomData);
             
+            // 设置当前玩家
             currentRoom = code;
             currentPlayer = playerNum;
             
             // 进入等待房间
-            showWaitingRoom();
-        }
-        
-        // 显示等待房间
-        function showWaitingRoom() {
             document.getElementById('joinPage').classList.add('hidden');
             document.getElementById('waitPage').classList.remove('hidden');
-            document.getElementById('currentRoom').innerText = currentRoom;
+            document.getElementById('roomCodeDisplay').innerText = code;
             
+            // 生成分享链接（方便转发）
+            const link = window.location.href.split('?')[0] + '?room=' + code;
+            document.getElementById('shareLink').innerText = link;
+            
+            // 刷新玩家列表
             updatePlayerList();
         }
         
-        // 更新玩家列表
+        // ==================== 等待房间 ====================
         function updatePlayerList() {
             const roomData = getRoom(currentRoom);
             if (!roomData) return;
             
             let html = '';
+            
+            // 显示玩家1-3
             for (let i = 1; i <= 3; i++) {
                 const player = roomData.players.find(p => p.num === i);
+                
                 if (player) {
-                    html += `<div style="padding: 15px; background: #f7fafc; margin: 5px 0; border-radius: 10px; border-left: 5px solid #48bb78;">
-                        👤 ${player.name} ${player.num === currentPlayer ? '(你)' : ''} - ${player.ready ? '✓ 已准备' : '⏳ 准备中'}
-                    </div>`;
+                    let status = player.ready ? '✓ 已准备' : '⏳ 准备中';
+                    let isYou = (player.num === currentPlayer) ? ' (你)' : '';
+                    html += `<div class="player-item">👤 ${player.name}${isYou} - ${status}</div>`;
                 } else {
-                    html += `<div style="padding: 15px; background: #f7fafc; margin: 5px 0; border-radius: 10px; opacity: 0.5;">
-                        👤 等待玩家...
-                    </div>`;
+                    html += `<div class="player-empty">👤 等待玩家加入...</div>`;
                 }
             }
+            
             document.getElementById('playerList').innerHTML = html;
+            
+            // 更新准备按钮状态
+            const me = roomData.players.find(p => p.num === currentPlayer);
+            if (me) {
+                const btn = document.getElementById('readyBtn');
+                if (me.ready) {
+                    btn.innerText = '取消准备';
+                    btn.style.background = '#f56565';
+                } else {
+                    btn.innerText = '准备游戏';
+                    btn.style.background = '#48bb78';
+                }
+            }
             
             // 检查是否三人全部准备
             if (roomData.players.length === 3 && roomData.players.every(p => p.ready)) {
@@ -247,25 +277,18 @@
         
         // 准备/取消准备
         function toggleReady() {
-            isReady = !isReady;
-            const btn = document.getElementById('readyBtn');
-            
             const roomData = getRoom(currentRoom);
-            if (roomData) {
-                const me = roomData.players.find(p => p.num === currentPlayer);
-                if (me) {
-                    me.ready = isReady;
-                }
+            if (!roomData) return;
+            
+            const me = roomData.players.find(p => p.num === currentPlayer);
+            if (me) {
+                me.ready = !me.ready;
                 saveRoom(currentRoom, roomData);
+                updatePlayerList();
             }
-            
-            btn.innerText = isReady ? '取消准备' : '准备游戏';
-            btn.style.background = isReady ? '#f56565' : '#48bb78';
-            
-            updatePlayerList();
         }
         
-        // 复制链接
+        // ==================== 工具函数 ====================
         function copyLink() {
             const link = document.getElementById('shareLink').innerText;
             navigator.clipboard.writeText(link).then(() => {
@@ -273,20 +296,19 @@
             });
         }
         
-        // 返回主菜单
         function backToMenu() {
             document.getElementById('menu').classList.remove('hidden');
-            document.getElementById('createPage').classList.add('hidden');
             document.getElementById('joinPage').classList.add('hidden');
             document.getElementById('waitPage').classList.add('hidden');
             document.getElementById('gamePage').classList.add('hidden');
         }
         
-        // 离开房间
         function leaveRoom() {
             const roomData = getRoom(currentRoom);
             if (roomData) {
+                // 移除当前玩家
                 roomData.players = roomData.players.filter(p => p.num !== currentPlayer);
+                
                 if (roomData.players.length === 0) {
                     localStorage.removeItem('room_' + currentRoom);
                 } else {
@@ -296,19 +318,18 @@
             backToMenu();
         }
         
-        // 离开游戏
         function leaveGame() {
             leaveRoom();
         }
         
-        // 定时刷新玩家列表
+        // ==================== 定时刷新 ====================
         setInterval(() => {
             if (currentRoom && !document.getElementById('waitPage').classList.contains('hidden')) {
                 updatePlayerList();
             }
         }, 1000);
         
-        // 页面加载
+        // ==================== 页面加载 ====================
         window.onload = function() {
             const urlParams = new URLSearchParams(window.location.search);
             const room = urlParams.get('room');
