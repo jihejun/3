@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>三人炸飞机 · 实时对战</title>
+    <title>三人炸飞机 · 1v2 双棋盘</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -37,7 +37,9 @@
         .btn-primary { background: #4299e1; }
         .btn-success { background: #48bb78; }
         .btn-warning { background: #ed8936; }
+        .btn-danger { background: #f56565; }
         .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         
         .hidden { display: none !important; }
         
@@ -70,12 +72,15 @@
         }
         .player-card.active { border-color: #48bb78; background: #22543d; }
         .player-card.ready { border-color: #48bb78; background: #276749; }
+        .player-card.eliminated { border-color: #f56565; background: #742a2a; opacity: 0.6; }
         
-        .battle-area {
+        .boards-container {
             display: flex;
             flex-direction: column;
             gap: 20px;
+            margin-top: 20px;
         }
+        
         .grid-container {
             background: #2d3748;
             padding: 15px;
@@ -97,14 +102,24 @@
             justify-content: center;
             font-size: 18px;
             color: white;
+            transition: all 0.1s;
         }
-        .cell.own-plane-head { background: #fbbf24; color: black; }  /* 机头 - 黄色 */
-        .cell.own-plane-body { background: #48bb78; }  /* 机身 - 绿色 */
-        .cell.hit-head { background: #f56565; }  /* 击中机头 - 红色 */
-        .cell.hit-body { background: #fbbf24; color: black; }  /* 击中机身 - 黄色 */
-        .cell.miss { background: #4299e1; }  /* 未击中 - 蓝色 */
-        .cell.enemy { cursor: pointer; }
-        .cell.enemy:hover { background: #4a5568; }
+        
+        /* 自己的飞机 */
+        .cell.own-plane-head { background: #fbbf24; color: black; }
+        .cell.own-plane-body { background: #48bb78; }
+        
+        /* 敌人棋盘（初始全黑） */
+        .cell.enemy-unknown { background: #1a1e2c; }
+        
+        /* 攻击结果 */
+        .cell.hit-head { background: #f56565; }  /* 机头 - 红色 */
+        .cell.hit-body { background: #fbbf24; color: black; }  /* 机身 - 黄色 */
+        .cell.miss { background: #4299e1; }  /* 空地 - 蓝色 */
+        
+        /* 可攻击的格子 */
+        .cell.enemy-cell { cursor: pointer; }
+        .cell.enemy-cell:hover { background: #4a5568; }
         
         .turn-indicator {
             background: #48bb78;
@@ -116,11 +131,38 @@
             font-weight: bold;
             margin-bottom: 20px;
         }
+        
+        .target-selector {
+            display: flex;
+            gap: 12px;
+            margin: 15px 0;
+        }
+        
+        .target-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+        }
+        .target-btn.active {
+            border: 3px solid #fbbf24;
+            transform: scale(1.02);
+        }
+        
+        .eliminated-tag {
+            color: #f56565;
+            font-size: 14px;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>✈️ 三人炸飞机 · 实时对战</h1>
+        <h1>✈️ 三人炸飞机 · 1v2 双棋盘</h1>
         
         <!-- 主菜单 -->
         <div id="menu">
@@ -163,7 +205,14 @@
         <div id="gamePage" class="hidden">
             <div id="turnDisplay" class="turn-indicator">⚔️ 等待开始...</div>
             
-            <div class="battle-area">
+            <!-- 目标选择器（我的回合才显示） -->
+            <div id="targetSelector" class="target-selector hidden">
+                <button id="targetEnemy1Btn" class="target-btn" style="background: #4299e1;" onclick="selectTarget(1)">🎯 攻击玩家1</button>
+                <button id="targetEnemy2Btn" class="target-btn" style="background: #4299e1;" onclick="selectTarget(2)">🎯 攻击玩家2</button>
+                <button id="targetEnemy3Btn" class="target-btn" style="background: #4299e1;" onclick="selectTarget(3)">🎯 攻击玩家3</button>
+            </div>
+            
+            <div class="boards-container">
                 <!-- 自己的棋盘 -->
                 <div class="grid-container">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
@@ -173,15 +222,31 @@
                     <div id="myGrid" class="grid"></div>
                 </div>
                 
-                <!-- 敌人棋盘 -->
-                <div id="enemyContainer">
-                    <div class="grid-container">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-                            <span id="enemyTitle">⚔️ 攻击目标</span>
-                            <span id="enemyPlanesLeft">剩余飞机: 3</span>
-                        </div>
-                        <div id="enemyGrid" class="grid"></div>
+                <!-- 玩家1的棋盘（如果我是2或3） -->
+                <div id="player1Board" class="grid-container">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                        <span id="player1Title">👤 玩家1 的阵地</span>
+                        <span id="player1PlanesLeft">飞机: 3</span>
                     </div>
+                    <div id="enemyGrid1" class="grid"></div>
+                </div>
+                
+                <!-- 玩家2的棋盘（如果我是1或3） -->
+                <div id="player2Board" class="grid-container">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                        <span id="player2Title">👤 玩家2 的阵地</span>
+                        <span id="player2PlanesLeft">飞机: 3</span>
+                    </div>
+                    <div id="enemyGrid2" class="grid"></div>
+                </div>
+                
+                <!-- 玩家3的棋盘（如果我是1或2） -->
+                <div id="player3Board" class="grid-container">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                        <span id="player3Title">👤 玩家3 的阵地</span>
+                        <span id="player3PlanesLeft">飞机: 3</span>
+                    </div>
+                    <div id="enemyGrid3" class="grid"></div>
                 </div>
             </div>
             
@@ -207,8 +272,8 @@
                 let attempts = 0;
                 
                 while (!placed && attempts < 1000) {
-                    const row = Math.floor(Math.random() * 7);  // 0-6
-                    const col = Math.floor(Math.random() * 6);  // 0-5
+                    const row = Math.floor(Math.random() * 7);
+                    const col = Math.floor(Math.random() * 6);
                     
                     if (canPlacePlane(board, row, col)) {
                         placePlane(board, row, col);
@@ -244,25 +309,22 @@
                 }
             }
         }
-        
+
         // ==================== 游戏核心 ====================
+        // 1v2 规则：每回合可以在两个存活敌人中选择一个攻击
         class Game {
             constructor() {
                 this.myBoard = generateRandomBoard();
-                this.attackRecords = {};
+                this.publicAttackRecords = {1: {}, 2: {}, 3: {}};  // 所有人都能看到的攻击记录
                 this.myPlanes = 3;
-                this.enemyPlanes = {2: 3, 3: 3};
+                this.enemyPlanes = {1: 3, 2: 3, 3: 3};
                 this.currentTurn = 1;
                 this.myPlayerNum = null;
                 this.roomId = null;
-                this.targetEnemy = null;
+                this.selectedTarget = null;
+                this.eliminated = {};  // 被淘汰的玩家
                 
-                // 攻击顺序：1->2, 2->3, 3->1
-                this.attackTarget = {
-                    1: 2,
-                    2: 3,
-                    3: 1
-                };
+                // 攻击顺序：1v2，每个人可以攻击任意存活的敌人
             }
             
             // 渲染自己的棋盘
@@ -286,25 +348,36 @@
                         grid.appendChild(cell);
                     }
                 }
+                
+                document.getElementById('myPlanesLeft').innerText = `飞机: ${this.myPlanes}`;
             }
             
-            // 渲染敌人棋盘
-            renderEnemyGrid() {
-                if (!this.targetEnemy) return;
+            // 渲染敌人棋盘（全黑 + 攻击记录）
+            renderEnemyGrid(playerNum) {
+                const gridId = `enemyGrid${playerNum}`;
+                const grid = document.getElementById(gridId);
+                if (!grid) return;
                 
-                const grid = document.getElementById('enemyGrid');
+                // 如果该玩家已被淘汰，显示特殊样式
+                if (this.eliminated[playerNum]) {
+                    const titleEl = document.getElementById(`player${playerNum}Title`);
+                    if (titleEl) {
+                        titleEl.innerHTML = `👤 玩家${playerNum} 的阵地 <span class="eliminated-tag">[已淘汰]</span>`;
+                    }
+                }
+                
                 grid.innerHTML = '';
                 
                 for (let i = 0; i < 10; i++) {
                     for (let j = 0; j < 10; j++) {
                         const cell = document.createElement('div');
-                        cell.className = 'cell enemy';
-                        cell.dataset.row = i;
-                        cell.dataset.col = j;
+                        cell.className = 'cell';
                         
-                        const key = `${this.targetEnemy}-${i}-${j}`;
-                        if (this.attackRecords[key]) {
-                            const record = this.attackRecords[key];
+                        // 获取公共攻击记录
+                        const key = `${i}-${j}`;
+                        const record = this.publicAttackRecords[playerNum]?.[key];
+                        
+                        if (record) {
                             if (record.isHit) {
                                 if (record.isHead) {
                                     cell.classList.add('hit-head');
@@ -317,93 +390,259 @@
                                 cell.classList.add('miss');
                                 cell.textContent = '×';
                             }
+                        } else {
+                            cell.classList.add('enemy-unknown');
                         }
                         
-                        cell.onclick = () => this.attack(i, j);
+                        // 只有自己的回合、目标玩家存活、且是该玩家时才能点击
+                        if (this.isMyTurn() && 
+                            !this.eliminated[playerNum] && 
+                            this.selectedTarget === playerNum) {
+                            cell.classList.add('enemy-cell');
+                            cell.dataset.row = i;
+                            cell.dataset.col = j;
+                            cell.onclick = () => this.attack(playerNum, i, j);
+                        }
+                        
                         grid.appendChild(cell);
+                    }
+                }
+                
+                // 更新飞机数量显示
+                if (!this.eliminated[playerNum]) {
+                    document.getElementById(`player${playerNum}PlanesLeft`).innerText = `飞机: ${this.enemyPlanes[playerNum]}`;
+                } else {
+                    document.getElementById(`player${playerNum}PlanesLeft`).innerText = `飞机: 0`;
+                }
+            }
+            
+            // 渲染所有敌人棋盘
+            renderAllEnemyGrids() {
+                for (let i = 1; i <= 3; i++) {
+                    if (i !== this.myPlayerNum) {
+                        this.renderEnemyGrid(i);
                     }
                 }
             }
             
+            // 显示/隐藏自己的敌人棋盘（根据玩家编号）
+            showCorrectBoards() {
+                // 先隐藏所有敌人棋盘
+                document.getElementById('player1Board').classList.add('hidden');
+                document.getElementById('player2Board').classList.add('hidden');
+                document.getElementById('player3Board').classList.add('hidden');
+                
+                // 显示除了自己以外的两个敌人棋盘
+                if (this.myPlayerNum !== 1) document.getElementById('player1Board').classList.remove('hidden');
+                if (this.myPlayerNum !== 2) document.getElementById('player2Board').classList.remove('hidden');
+                if (this.myPlayerNum !== 3) document.getElementById('player3Board').classList.remove('hidden');
+            }
+            
             // 攻击
-            attack(row, col) {
+            attack(targetPlayer, row, col) {
                 if (!this.isMyTurn()) {
                     alert('现在不是你的回合！');
                     return;
                 }
                 
-                if (!this.targetEnemy) {
+                if (this.eliminated[targetPlayer]) {
+                    alert('该玩家已被淘汰！');
+                    return;
+                }
+                
+                if (this.selectedTarget !== targetPlayer) {
                     alert('请先选择攻击目标！');
                     return;
                 }
                 
-                const targetPlayer = this.targetEnemy;
-                const key = `${targetPlayer}-${row}-${col}`;
+                const roomData = getRoom(this.roomId);
+                if (!roomData) return;
                 
-                if (this.attackRecords[key]) {
+                const key = `${row}-${col}`;
+                
+                // 检查是否已经攻击过
+                if (this.publicAttackRecords[targetPlayer]?.[key]) {
                     alert('这个位置已经攻击过了！');
                     return;
                 }
                 
-                // 从房间获取对方棋盘
-                const roomData = getRoom(this.roomId);
-                if (!roomData) return;
-                
+                // 获取对方棋盘
                 const enemyBoard = roomData.boards[targetPlayer];
                 const cellValue = enemyBoard[row][col];
                 
                 const isHit = cellValue !== 0;
                 const isHead = cellValue === 2;
                 
-                this.attackRecords[key] = {
-                    isHit,
-                    isHead,
-                    row,
-                    col,
+                // 创建公共攻击记录
+                if (!this.publicAttackRecords[targetPlayer]) {
+                    this.publicAttackRecords[targetPlayer] = {};
+                }
+                
+                this.publicAttackRecords[targetPlayer][key] = {
+                    isHit: isHit,
+                    isHead: isHead,
+                    row: row,
+                    col: col,
+                    attacker: this.myPlayerNum,
                     time: Date.now()
                 };
                 
+                // 同步到房间数据
+                roomData.publicAttackRecords = JSON.parse(JSON.stringify(this.publicAttackRecords));
+                
+                let message = '';
                 if (isHit) {
                     if (isHead) {
-                        // 击落一架飞机（机头被击中）
+                        // 击落一架飞机
                         this.enemyPlanes[targetPlayer]--;
                         if (this.enemyPlanes[targetPlayer] < 0) this.enemyPlanes[targetPlayer] = 0;
-                        alert(`💥 击中机头！玩家${targetPlayer}一架飞机被击落！`);
+                        roomData.enemyPlanes[targetPlayer] = this.enemyPlanes[targetPlayer];
+                        
+                        message = `💥 击中机头！玩家${targetPlayer}一架飞机被击落！`;
+                        
+                        // 检查是否淘汰
+                        if (this.enemyPlanes[targetPlayer] === 0) {
+                            this.eliminated[targetPlayer] = true;
+                            roomData.eliminated[targetPlayer] = true;
+                            message += ` 玩家${targetPlayer}被淘汰！`;
+                            
+                            // 检查游戏是否结束
+                            const activePlayers = this.getActivePlayers();
+                            if (activePlayers.length === 1) {
+                                message += ` 🏆 玩家${activePlayers[0]}获胜！`;
+                            }
+                        }
+                    } else {
+                        message = `🎯 击中机身！`;
                     }
-                    
-                    // 更新房间内的攻击记录和飞机状态
-                    roomData.attackRecords = roomData.attackRecords || {};
-                    roomData.attackRecords[key] = this.attackRecords[key];
-                    roomData.enemyPlanes[targetPlayer] = this.enemyPlanes[targetPlayer];
+                } else {
+                    message = `💧 未击中...`;
                 }
                 
-                // 切换回合
-                this.currentTurn = this.currentTurn === 3 ? 1 : this.currentTurn + 1;
-                roomData.currentTurn = this.currentTurn;
-                
+                // 保存房间数据
+                roomData.enemyPlanes = {...this.enemyPlanes};
+                roomData.eliminated = {...this.eliminated};
                 saveRoom(this.roomId, roomData);
                 
                 // 更新显示
-                this.renderEnemyGrid();
-                document.getElementById('enemyPlanesLeft').innerText = `剩余飞机: ${this.enemyPlanes[targetPlayer]}`;
+                this.renderEnemyGrid(targetPlayer);
+                
+                // 显示攻击结果
+                alert(message);
+                
+                // 检查游戏结束
+                const activePlayers = this.getActivePlayers();
+                if (activePlayers.length === 1) {
+                    return;  // 游戏结束，不切换回合
+                }
+                
+                // 清除目标选择
+                this.selectedTarget = null;
+                this.updateTargetSelector();
+                
+                // 切换回合到下一个存活玩家
+                this.nextTurn();
+            }
+            
+            // 获取存活玩家
+            getActivePlayers() {
+                const active = [];
+                for (let i = 1; i <= 3; i++) {
+                    if (!this.eliminated[i]) {
+                        active.push(i);
+                    }
+                }
+                return active;
+            }
+            
+            // 切换回合
+            nextTurn() {
+                const activePlayers = this.getActivePlayers();
+                
+                if (activePlayers.length <= 1) {
+                    return;  // 游戏结束
+                }
+                
+                // 找到当前玩家的下一个存活玩家
+                let next = this.currentTurn;
+                do {
+                    next = next === 3 ? 1 : next + 1;
+                } while (!activePlayers.includes(next));
+                
+                this.currentTurn = next;
+                
+                // 同步到房间
+                const roomData = getRoom(this.roomId);
+                if (roomData) {
+                    roomData.currentTurn = this.currentTurn;
+                    saveRoom(this.roomId, roomData);
+                }
+                
                 this.updateTurnDisplay();
                 
-                // 检查是否胜利
-                if (this.enemyPlanes[targetPlayer] === 0) {
-                    if (targetPlayer === 2) {
-                        alert('🏆 你击落了玩家2的所有飞机！');
-                    } else if (targetPlayer === 3) {
-                        alert('🏆 你击落了玩家3的所有飞机！');
+                // 如果是自己的回合，显示目标选择器
+                if (this.isMyTurn()) {
+                    this.showTargetSelector();
+                } else {
+                    this.hideTargetSelector();
+                }
+                
+                this.renderAllEnemyGrids();
+            }
+            
+            // 选择攻击目标
+            selectTarget(playerNum) {
+                if (!this.isMyTurn()) return;
+                if (this.eliminated[playerNum]) {
+                    alert('该玩家已被淘汰！');
+                    return;
+                }
+                if (playerNum === this.myPlayerNum) {
+                    alert('不能攻击自己！');
+                    return;
+                }
+                
+                this.selectedTarget = playerNum;
+                this.updateTargetSelector();
+                this.renderAllEnemyGrids();  // 重新渲染，使目标棋盘可点击
+            }
+            
+            // 更新目标选择器UI
+            updateTargetSelector() {
+                // 隐藏所有目标按钮
+                for (let i = 1; i <= 3; i++) {
+                    const btn = document.getElementById(`targetEnemy${i}Btn`);
+                    if (btn) btn.classList.remove('active');
+                }
+                
+                if (this.selectedTarget) {
+                    const activeBtn = document.getElementById(`targetEnemy${this.selectedTarget}Btn`);
+                    if (activeBtn) activeBtn.classList.add('active');
+                }
+            }
+            
+            // 显示目标选择器
+            showTargetSelector() {
+                const selector = document.getElementById('targetSelector');
+                selector.classList.remove('hidden');
+                
+                // 显示存活的敌人
+                for (let i = 1; i <= 3; i++) {
+                    const btn = document.getElementById(`targetEnemy${i}Btn`);
+                    if (btn) {
+                        if (i === this.myPlayerNum || this.eliminated[i]) {
+                            btn.style.display = 'none';
+                        } else {
+                            btn.style.display = 'block';
+                        }
                     }
                 }
             }
             
-            // 设置攻击目标
-            setTarget(playerNum) {
-                this.targetEnemy = playerNum;
-                document.getElementById('enemyTitle').innerHTML = `⚔️ 攻击玩家${playerNum}`;
-                document.getElementById('enemyPlanesLeft').innerText = `剩余飞机: ${this.enemyPlanes[playerNum]}`;
-                this.renderEnemyGrid();
+            // 隐藏目标选择器
+            hideTargetSelector() {
+                document.getElementById('targetSelector').classList.add('hidden');
+                this.selectedTarget = null;
             }
             
             isMyTurn() {
@@ -414,14 +653,11 @@
                 const turnDisplay = document.getElementById('turnDisplay');
                 
                 if (this.isMyTurn()) {
-                    const target = this.attackTarget[this.myPlayerNum];
-                    turnDisplay.innerHTML = `⚔️ 你的回合！攻击玩家${target}`;
+                    turnDisplay.innerHTML = `⚔️ 你的回合！请选择攻击目标`;
                     turnDisplay.style.background = '#48bb78';
-                    this.setTarget(target);
                 } else {
                     turnDisplay.innerHTML = `👀 玩家${this.currentTurn} 的回合`;
                     turnDisplay.style.background = '#ed8936';
-                    this.targetEnemy = null;
                 }
             }
             
@@ -432,15 +668,24 @@
                 const roomData = getRoom(this.roomId);
                 if (roomData) {
                     this.currentTurn = roomData.currentTurn || 1;
-                    this.attackRecords = roomData.attackRecords || {};
-                    this.enemyPlanes = roomData.enemyPlanes || {2: 3, 3: 3};
+                    this.publicAttackRecords = roomData.publicAttackRecords || {1: {}, 2: {}, 3: {}};
+                    this.enemyPlanes = roomData.enemyPlanes || {1: 3, 2: 3, 3: 3};
+                    this.eliminated = roomData.eliminated || {};
                 }
                 
                 document.getElementById('waitPage').classList.add('hidden');
                 document.getElementById('gamePage').classList.remove('hidden');
                 
+                // 显示正确的棋盘
+                this.showCorrectBoards();
+                
                 this.renderMyGrid();
+                this.renderAllEnemyGrids();
                 this.updateTurnDisplay();
+                
+                if (this.isMyTurn()) {
+                    this.showTargetSelector();
+                }
             }
         }
 
@@ -474,8 +719,9 @@
                     2: generateRandomBoard(),
                     3: generateRandomBoard()
                 },
-                attackRecords: {},
-                enemyPlanes: {2: 3, 3: 3},
+                publicAttackRecords: {1: {}, 2: {}, 3: {}},
+                enemyPlanes: {1: 3, 2: 3, 3: 3},
+                eliminated: {},
                 currentTurn: 1,
                 created: Date.now()
             };
@@ -565,9 +811,10 @@
                 if (player) {
                     const isYou = player.num === currentPlayer ? ' (你)' : '';
                     const ready = player.ready ? '✓ 已准备' : '⏳ 准备中';
-                    html += `<div class="player-card ${player.ready ? 'ready' : ''} ${player.num === currentPlayer ? 'active' : ''}">
+                    const eliminated = roomData.eliminated && roomData.eliminated[i] ? ' eliminated' : '';
+                    html += `<div class="player-card ${player.ready ? 'ready' : ''} ${player.num === currentPlayer ? 'active' : ''}${eliminated ? ' eliminated' : ''}">
                                 <div style="font-size: 18px; margin-bottom: 5px;">👤 ${player.name}${isYou}</div>
-                                <div style="font-size: 14px; color: #a0aec0;">${ready}</div>
+                                <div style="font-size: 14px; color: #a0aec0;">${roomData.eliminated && roomData.eliminated[i] ? '❌ 已淘汰' : ready}</div>
                             </div>`;
                 } else {
                     html += `<div class="player-card" style="opacity: 0.5;">
@@ -609,7 +856,7 @@
         function copyLink() {
             const link = document.getElementById('shareLink').innerText;
             navigator.clipboard.writeText(link).then(() => {
-                alert('✅ 链接已复制！');
+                alert('✅ 链接已复制！发送给好友吧！');
             });
         }
         
@@ -618,6 +865,9 @@
             document.getElementById('joinPage').classList.add('hidden');
             document.getElementById('waitPage').classList.add('hidden');
             document.getElementById('gamePage').classList.add('hidden');
+            currentRoom = null;
+            currentPlayer = null;
+            game = null;
         }
         
         function leaveRoom() {
@@ -637,27 +887,52 @@
             leaveRoom();
         }
         
+        // 全局函数供HTML调用
+        function selectTarget(playerNum) {
+            if (game) {
+                game.selectTarget(playerNum);
+            }
+        }
+        
         // 定时同步
         setInterval(() => {
-            if (currentRoom && game && !document.getElementById('waitPage').classList.contains('hidden') === false) {
+            if (currentRoom && game && document.getElementById('gamePage').classList.contains('hidden') === false) {
                 const roomData = getRoom(currentRoom);
                 if (roomData) {
+                    // 同步回合
                     if (roomData.currentTurn !== game.currentTurn) {
                         game.currentTurn = roomData.currentTurn;
-                        game.attackRecords = roomData.attackRecords || {};
-                        game.enemyPlanes = roomData.enemyPlanes || {2: 3, 3: 3};
                         game.updateTurnDisplay();
                         
-                        if (game.targetEnemy) {
-                            game.renderEnemyGrid();
+                        if (game.isMyTurn()) {
+                            game.showTargetSelector();
+                        } else {
+                            game.hideTargetSelector();
                         }
                     }
+                    
+                    // 同步攻击记录
+                    if (roomData.publicAttackRecords) {
+                        game.publicAttackRecords = roomData.publicAttackRecords;
+                    }
+                    
+                    // 同步飞机数量
+                    if (roomData.enemyPlanes) {
+                        game.enemyPlanes = roomData.enemyPlanes;
+                    }
+                    
+                    // 同步淘汰状态
+                    if (roomData.eliminated) {
+                        game.eliminated = roomData.eliminated;
+                    }
+                    
+                    game.renderAllEnemyGrids();
                 }
             }
         }, 500);
         
         setInterval(() => {
-            if (currentRoom && !document.getElementById('waitPage').classList.contains('hidden')) {
+            if (currentRoom && document.getElementById('waitPage').classList.contains('hidden') === false) {
                 updatePlayerList();
             }
         }, 1000);
