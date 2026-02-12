@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>三人炸飞机 · 实时对战</title>
     <style>
+        /* 样式保持不变，用您现有的样式 */
         * {
             margin: 0;
             padding: 0;
@@ -335,7 +336,7 @@
             <button class="btn btn-warning" onclick="leaveRoom()">离开房间</button>
             
             <div style="margin-top: 20px; padding: 15px; background: #2d3748; border-radius: 12px; text-align: center; color: #a0aec0;">
-                ⏳ 等待所有玩家准备... (3/3)
+                ⏳ 等待所有玩家准备...
             </div>
         </div>
         
@@ -375,41 +376,74 @@
     </div>
 
     <script>
+        // ==================== 房间状态管理 ====================
+        // 使用 localStorage 共享房间状态
+        const ROOM_STORAGE_KEY = 'plane_game_rooms';
+        
+        // 获取所有房间
+        function getRooms() {
+            const rooms = localStorage.getItem(ROOM_STORAGE_KEY);
+            return rooms ? JSON.parse(rooms) : {};
+        }
+        
+        // 保存房间
+        function saveRoom(roomId, roomData) {
+            const rooms = getRooms();
+            rooms[roomId] = {
+                ...roomData,
+                lastUpdate: Date.now()
+            };
+            localStorage.setItem(ROOM_STORAGE_KEY, JSON.stringify(rooms));
+        }
+        
+        // 获取房间
+        function getRoom(roomId) {
+            const rooms = getRooms();
+            return rooms[roomId];
+        }
+        
+        // 获取下一个可用的玩家编号
+        function getNextPlayerNumber(roomId) {
+            const room = getRoom(roomId);
+            if (!room) return 1;
+            
+            const usedNumbers = room.players.map(p => p.num);
+            for (let i = 1; i <= 3; i++) {
+                if (!usedNumbers.includes(i)) {
+                    return i;
+                }
+            }
+            return null; // 房间已满
+        }
+        
         // ==================== 游戏核心 ====================
         class PlaneGame {
             constructor() {
-                // 游戏状态
                 this.roomId = null;
-                this.playerNum = null; // 1,2,3
+                this.playerNum = null;
                 this.players = [];
-                this.gameState = 'waiting'; // waiting, playing, ended
+                this.gameState = 'waiting';
                 this.currentTurn = 1;
                 this.isMyTurn = false;
                 this.selectedEnemy = null;
                 
-                // 飞机布局 (10x10)
                 this.myGrid = Array(10).fill().map(() => Array(10).fill(0));
                 this.enemyGrids = {
                     2: Array(10).fill().map(() => Array(10).fill(0)),
                     3: Array(10).fill().map(() => Array(10).fill(0))
                 };
                 
-                // 攻击记录
                 this.attackHistory = {};
-                
-                // 飞机数量
                 this.planesLeft = 3;
                 this.enemyPlanes = {
                     2: 3,
                     3: 3
                 };
                 
-                // 初始化
                 this.init();
             }
             
             init() {
-                // 从URL获取房间号
                 const urlParams = new URLSearchParams(window.location.search);
                 const roomParam = urlParams.get('room');
                 if (roomParam) {
@@ -417,20 +451,14 @@
                     setTimeout(() => showJoinRoom(), 100);
                 }
                 
-                // 随机放置自己的飞机
                 this.placeMyPlanes();
             }
             
-            // 随机放置飞机 (工字形)
             placeMyPlanes() {
                 const shapes = [
-                    // 机头向上
                     [[0,0,1,0,0], [1,1,1,1,1], [0,0,1,0,0], [0,1,1,1,0]],
-                    // 机头向右
                     [[0,1,0,0,0], [0,1,1,1,1], [0,1,0,1,0], [0,0,0,1,0]],
-                    // 机头向下
                     [[0,1,1,1,0], [0,0,1,0,0], [1,1,1,1,1], [0,0,1,0,0]],
-                    // 机头向左
                     [[0,0,0,1,0], [0,1,0,1,0], [1,1,1,1,0], [0,1,0,0,0]]
                 ];
                 
@@ -506,7 +534,6 @@
                         cell.dataset.row = i;
                         cell.dataset.col = j;
                         
-                        // 检查是否有攻击记录
                         const key = `${playerNum}-${i}-${j}`;
                         if (this.attackHistory[key]) {
                             if (this.attackHistory[key].hit) {
@@ -541,7 +568,6 @@
                     return;
                 }
                 
-                // 模拟攻击结果 (实际应该从对手那里获取)
                 const isHit = Math.random() > 0.5;
                 
                 this.attackHistory[key] = {
@@ -552,7 +578,7 @@
                 };
                 
                 if (isHit) {
-                    this.enemyPlanes[playerNum] -= 0.2; // 简化版，实际应该5个格子击落一架
+                    this.enemyPlanes[playerNum] -= 0.2;
                     if (this.enemyPlanes[playerNum] <= 0) {
                         this.enemyPlanes[playerNum] = 0;
                         alert(`玩家${playerNum} 的飞机全部击落！`);
@@ -560,13 +586,10 @@
                 }
                 
                 this.renderEnemyGrid(playerNum);
-                
-                // 切换回合
                 this.nextTurn();
             }
             
             nextTurn() {
-                // 简单轮流: 1->2->3->1
                 this.currentTurn = this.currentTurn === 3 ? 1 : this.currentTurn + 1;
                 this.isMyTurn = (this.currentTurn === this.playerNum);
                 
@@ -611,7 +634,7 @@
             }
         }
 
-        // ==================== 全局变量 ====================
+        // ==================== 界面控制 ====================
         let game = null;
         let currentRoomId = null;
         let currentPlayerNum = null;
@@ -619,9 +642,27 @@
         let isRoomCreator = false;
         let isPlayerReady = false;
         
-        // ==================== 界面控制 ====================
+        // 定期同步房间状态
+        setInterval(() => {
+            if (currentRoomId) {
+                const room = getRoom(currentRoomId);
+                if (room && room.players) {
+                    // 更新玩家列表
+                    roomPlayers = room.players;
+                    if (document.getElementById('waitingRoom').classList.contains('hidden') === false) {
+                        updateWaitingPlayersList();
+                    }
+                    
+                    // 检查是否全部准备
+                    const allReady = room.players.length === 3 && room.players.every(p => p.ready);
+                    if (allReady && game && game.gameState === 'waiting') {
+                        game.startGame();
+                    }
+                }
+            }
+        }, 1000);
+        
         function showCreateRoom() {
-            // 生成房间号
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             let roomCode = '';
             for (let i = 0; i < 6; i++) {
@@ -637,18 +678,22 @@
                 { num: 3, name: '玩家3', ready: false, isYou: false }
             ];
             
+            // 保存房间状态
+            saveRoom(roomCode, {
+                players: roomPlayers,
+                created: Date.now(),
+                gameState: 'waiting'
+            });
+            
             document.getElementById('roomCodeDisplay').textContent = roomCode;
             
-            // 生成分享链接
             const shareUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
             document.getElementById('shareLink').textContent = shareUrl;
             
-            // 显示界面
             document.getElementById('menu').classList.remove('active');
             document.getElementById('menu').classList.add('hidden');
             document.getElementById('createRoom').classList.remove('hidden');
             
-            // 初始化游戏
             game = new PlaneGame();
             game.roomId = roomCode;
             game.playerNum = 1;
@@ -667,20 +712,49 @@
                 return;
             }
             
+            // 获取房间状态
+            let room = getRoom(roomCode);
+            
+            if (!room) {
+                // 房间不存在，创建新房间状态
+                room = {
+                    players: [
+                        { num: 1, name: '玩家1', ready: false, isYou: false },
+                    ],
+                    created: Date.now(),
+                    gameState: 'waiting'
+                };
+            }
+            
+            // 获取可用的玩家编号
+            const playerNum = getNextPlayerNumber(roomCode);
+            if (!playerNum) {
+                alert('房间已满，最多3人');
+                return;
+            }
+            
             currentRoomId = roomCode;
-            currentPlayerNum = 2; // 简化版，第二个加入的是玩家2
+            currentPlayerNum = playerNum;
             isRoomCreator = false;
-            roomPlayers = [
-                { num: 1, name: '玩家1', ready: false, isYou: false },
-                { num: 2, name: '玩家2', ready: false, isYou: true },
-                { num: 3, name: '玩家3', ready: false, isYou: false }
-            ];
+            
+            // 添加新玩家
+            room.players.push({
+                num: playerNum,
+                name: `玩家${playerNum}`,
+                ready: false,
+                isYou: true
+            });
+            
+            roomPlayers = room.players;
+            
+            // 保存更新后的房间状态
+            saveRoom(roomCode, room);
             
             showWaitingRoom();
             
             game = new PlaneGame();
             game.roomId = roomCode;
-            game.playerNum = 2;
+            game.playerNum = playerNum;
         }
         
         function showWaitingRoom() {
@@ -689,29 +763,40 @@
             document.getElementById('currentRoomCode').textContent = currentRoomId;
             
             updateWaitingPlayersList();
-            
-            // 模拟玩家加入
-            setTimeout(() => {
-                if (roomPlayers[1].isYou) {
-                    roomPlayers[2] = { num: 3, name: '玩家3', ready: false, isYou: false };
-                    updateWaitingPlayersList();
-                }
-            }, 3000);
         }
         
         function updateWaitingPlayersList() {
             const list = document.getElementById('waitingPlayersList');
             list.innerHTML = '';
             
-            roomPlayers.forEach(player => {
-                const card = document.createElement('div');
-                card.className = `player-card ${player.ready ? 'ready' : ''} ${player.isYou ? 'active' : ''}`;
-                card.innerHTML = `
-                    <div class="player-name">👤 ${player.name} ${player.isYou ? '(你)' : ''}</div>
-                    <div class="player-status">${player.ready ? '✓ 已准备' : '⏳ 准备中...'}</div>
-                `;
-                list.appendChild(card);
-            });
+            // 获取最新房间状态
+            const room = getRoom(currentRoomId);
+            if (room) {
+                roomPlayers = room.players;
+            }
+            
+            // 确保显示3个玩家位置
+            for (let i = 1; i <= 3; i++) {
+                const player = roomPlayers.find(p => p.num === i);
+                if (player) {
+                    const card = document.createElement('div');
+                    card.className = `player-card ${player.ready ? 'ready' : ''} ${player.isYou ? 'active' : ''}`;
+                    card.innerHTML = `
+                        <div class="player-name">👤 ${player.name} ${player.isYou ? '(你)' : ''}</div>
+                        <div class="player-status">${player.ready ? '✓ 已准备' : '⏳ 准备中...'}</div>
+                    `;
+                    list.appendChild(card);
+                } else {
+                    // 空位
+                    const card = document.createElement('div');
+                    card.className = 'player-card';
+                    card.innerHTML = `
+                        <div class="player-name">👤 等待玩家...</div>
+                        <div class="player-status">⏳ 等待加入</div>
+                    `;
+                    list.appendChild(card);
+                }
+            }
         }
         
         function toggleReady() {
@@ -719,9 +804,15 @@
             const btn = document.getElementById('readyButton');
             
             // 更新自己的状态
-            roomPlayers.forEach(p => {
-                if (p.isYou) p.ready = isPlayerReady;
-            });
+            const room = getRoom(currentRoomId);
+            if (room) {
+                const me = room.players.find(p => p.num === currentPlayerNum);
+                if (me) {
+                    me.ready = isPlayerReady;
+                }
+                saveRoom(currentRoomId, room);
+                roomPlayers = room.players;
+            }
             
             if (isPlayerReady) {
                 btn.textContent = '取消准备';
@@ -734,8 +825,8 @@
             updateWaitingPlayersList();
             
             // 检查是否全部准备
-            const allReady = roomPlayers.length === 3 && roomPlayers.every(p => p.ready);
-            if (allReady) {
+            const room = getRoom(currentRoomId);
+            if (room && room.players.length === 3 && room.players.every(p => p.ready)) {
                 setTimeout(() => {
                     startGame();
                 }, 1000);
@@ -771,16 +862,28 @@
         }
         
         function leaveRoom() {
+            // 离开时从房间移除自己
+            const room = getRoom(currentRoomId);
+            if (room) {
+                room.players = room.players.filter(p => p.num !== currentPlayerNum);
+                if (room.players.length === 0) {
+                    // 房间没人的时候删除
+                    const rooms = getRooms();
+                    delete rooms[currentRoomId];
+                    localStorage.setItem(ROOM_STORAGE_KEY, JSON.stringify(rooms));
+                } else {
+                    saveRoom(currentRoomId, room);
+                }
+            }
             backToMenu();
         }
         
         function leaveGame() {
-            backToMenu();
+            leaveRoom();
         }
         
         // 初始化
         window.onload = function() {
-            // 检查URL参数
             const urlParams = new URLSearchParams(window.location.search);
             const roomParam = urlParams.get('room');
             if (roomParam) {
